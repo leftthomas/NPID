@@ -1,5 +1,5 @@
-# REIR
-A PyTorch implementation of REIR based on the paper [Randomized Ensembles for Image Retrieval]().
+# RHV
+A PyTorch implementation of RHV based on the paper [Randomized Hash Vector]().
 
 ## Requirements
 - [Anaconda](https://www.anaconda.com/download/)
@@ -23,13 +23,11 @@ python train.py --data_name cub --crop_type cropped --model_type resnet34 --num_
 optional arguments:
 --data_name                   dataset name [default value is 'car'](choices=['car', 'cub', 'sop', 'isc'])
 --crop_type                   crop data or not, it only works for car or cub dataset [default value is 'uncropped'](choices=['uncropped', 'cropped'])
---label_type                  assign label with random method or fixed method [default value is 'fixed'](choices=['fixed', 'random'])
 --recalls                     selected recall [default value is '1,2,4,8']
 --model_type                  backbone type [default value is 'resnet18'](choices=['resnet18', 'resnet34', 'resnet50', 'resnext50_32x4d'])
---share_type                  shared module type [default value is 'layer1'](choices=['none', 'maxpool', 'layer1', 'layer2', 'layer3', 'layer4'])
 --with_random                 with branch random weight or not [default value is False]
 --load_ids                    load already generated ids or not [default value is False]
---batch_size                  train batch size [default value is 8]
+--batch_size                  train batch size [default value is 10]
 --num_epochs                  train epochs number [default value is 20]
 --ensemble_size               ensemble model size [default value is 48]
 --meta_class_size             meta class size [default value is 12]
@@ -41,7 +39,7 @@ optional arguments:
 python inference.py --retrieval_num 10 --data_type train
 optional arguments:
 --query_img_name              query image name [default value is 'data/car/uncropped/008055.jpg']
---data_base                   queried database [default value is 'car_uncropped_fixed_random_resnet18_48_12_data_base.pth']
+--data_base                   queried database [default value is 'car_uncropped_random_resnet18_48_12_data_base.pth']
 --data_type                   retrieval database type [default value is 'test'](choices=['train', 'test'])
 --retrieval_num               retrieval number [default value is 8]
 ```
@@ -50,22 +48,24 @@ optional arguments:
 ```
 python ablation.py --save_results
 optional arguments:
---better_data_base            better database [default value is 'car_uncropped_fixed_unrandom_layer1_resnet18_48_12_data_base.pth']
---worse_data_base             worse database [default value is 'car_uncropped_random_unrandom_layer1_resnet18_48_12_data_base.pth']
+--better_data_base            better database [default value is 'car_uncropped_unrandom_resnet18_48_12_data_base.pth']
+--worse_data_base             worse database [default value is 'car_uncropped_unrandom_resnet18_48_12_data_base.pth']
 --data_type                   retrieval database type [default value is 'test'](choices=['train', 'test'])
 --retrieval_num               retrieval number [default value is 8]
 --save_results                with save results or not [default value is False]
 ```
 
 ## Benchmarks
-Adam optimizer is used with learning rate scheduling. The models are trained with batch size `8` on two 
+Adam optimizer is used with learning rate scheduling. The models are trained with batch size `10` on two 
 NVIDIA Tesla V100 (32G) GPUs.
 
 The images are preprocessed with resize (256, 256), random horizontal flip and normalize. 
 
 For `CARS196` and `CUB200` datasets, ensemble size `48`, meta class size `12` and `20` epochs are used. 
 
-For `SOP` and `In-shop` datasets, ensemble size `24`, meta class size `192` and `30` epochs are used.
+For `SOP` dataset, ensemble size `48`, meta class size `512` and `40` epochs are used.
+
+For `In-shop` dataset, ensemble size `48`, meta class size `192` and `40` epochs are used.
 
 Here is the model parameter details:
 <table>
