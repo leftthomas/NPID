@@ -9,7 +9,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         # backbone
-        backbone, expansion = resnet18, 1
+        backbone, expansion = resnet18(), 1
         module_names = ['conv1', 'bn1', 'relu', 'maxpool', 'layer1', 'layer2', 'layer3', 'layer4']
 
         # configs
