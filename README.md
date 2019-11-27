@@ -24,7 +24,7 @@ optional arguments:
 --with_random                 with branch random weight or not [default value is False]
 --load_ids                    load already generated ids or not [default value is False]
 --batch_size                  train batch size [default value is 32]
---num_epochs                  train epochs number [default value is 20]
+--num_epochs                  train epochs number [default value is 40]
 --ensemble_size               ensemble model size [default value is 12]
 --meta_class_size             meta class size [default value is 6]
 --gpu_ids                     selected gpu [default value is '0,1']

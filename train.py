@@ -20,12 +20,11 @@ def train(net, optim):
     net.train()
     l_data, t_data, n_data, train_progress = 0, 0, 0, tqdm(train_data_loader)
     for inputs, labels in train_progress:
-        for index in labels:
-            vector_nums[index] += 1
         optim.zero_grad()
         out = net(inputs.to(device_ids[0]))
         for i, vector in enumerate(out.detach().cpu()):
-            meta_vectors[labels[i]] += F.normalize(vector, dim=-1)
+            memory_bank_vectors.append(F.normalize(vector, dim=-1))
+            memory_bank_labels.append(labels[i])
         meta_labels = meta_ids[labels]
         loss = cel_criterion(out.permute(0, 2, 1).contiguous(), meta_labels.to(device_ids[0]))
         loss.backward()
@@ -51,10 +50,11 @@ def val(net):
             n_data += len(labels)
             l_data += loss.item() * len(labels)
             out = F.normalize(out, dim=-1)
-            sim_matrix = (out.cpu()[:, None, :, None, :] @ meta_vectors[None, :, :, :, None]).squeeze(
+            sim_matrix = (out.cpu()[:, None, :, None, :] @ memory_bank_vectors[None, :, :, :, None]).squeeze(
                 dim=-1).squeeze(dim=-1).mean(dim=-1)
             idx = sim_matrix.argsort(dim=-1, descending=True)
-            t_data += (torch.sum((idx[:, 0:1] == labels.unsqueeze(dim=-1)).any(dim=-1).float())).item()
+            t_data += (
+                torch.sum((memory_bank_labels[idx[:, 0:1]] == labels.unsqueeze(dim=-1)).any(dim=-1).float())).item()
             val_progress.set_description('Epoch {}/{} - Val Loss:{:.4f} - Val Acc:{:.2f}%'
                                          .format(epoch, NUM_EPOCHS, l_data / n_data, t_data / n_data * 100))
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--with_random', action='store_true', help='with branch random weight or not')
     parser.add_argument('--load_ids', action='store_true', help='load already generated ids or not')
     parser.add_argument('--batch_size', default=32, type=int, help='train batch size')
-    parser.add_argument('--num_epochs', default=20, type=int, help='train epoch number')
+    parser.add_argument('--num_epochs', default=40, type=int, help='train epoch number')
     parser.add_argument('--ensemble_size', default=12, type=int, help='ensemble model size')
     parser.add_argument('--meta_class_size', default=6, type=int, help='meta class size')
     parser.add_argument('--gpu_ids', default='0,1', type=str, help='selected gpu')
@@ -105,13 +105,13 @@ if __name__ == '__main__':
 
     best_acc = 0
     for epoch in range(1, NUM_EPOCHS + 1):
-        meta_vectors = torch.zeros(len(train_data_set.classes), ENSEMBLE_SIZE, META_CLASS_SIZE)
-        vector_nums = torch.zeros(len(train_data_set.classes))
+        memory_bank_vectors, memory_bank_labels = [], []
         train_loss, train_accuracy = train(model, optimizer)
-        meta_vectors /= vector_nums.unsqueeze(-1).unsqueeze(-1)
         results['train_loss'].append(train_loss)
         results['train_accuracy'].append(train_accuracy)
         lr_scheduler.step(epoch)
+        memory_bank_vectors = torch.stack(memory_bank_vectors)
+        memory_bank_labels = torch.stack(memory_bank_labels)
 
         val_loss, val_accuracy = val(model)
         results['val_loss'].append(val_loss)
