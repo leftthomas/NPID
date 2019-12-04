@@ -1,124 +1,145 @@
 import argparse
 import os
 
-import pandas as pd
 import torch
-import torch.nn.functional as F
-from torch.nn import CrossEntropyLoss
-from torch.nn import DataParallel
-from torch.optim import Adam
-from torch.optim.lr_scheduler import MultiStepLR
-from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import ImageFolder
-from tqdm import tqdm
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import datasets, transforms
 
-from model import Model
-from utils import train_transform, val_transform, assign_meta_id
+from model import Net
 
 
-def train(net, optim):
-    net.train()
-    l_data, t_data, n_data, train_progress = 0, 0, 0, tqdm(train_data_loader)
-    for inputs, labels in train_progress:
-        optim.zero_grad()
-        out = net(inputs.to(device_ids[0]))
-        for i, vector in enumerate(out.detach().cpu()):
-            memory_bank_vectors.append(F.normalize(vector, dim=-1))
-            memory_bank_labels.append(labels[i])
-        meta_labels = meta_ids[labels]
-        loss = cel_criterion(out.permute(0, 2, 1).contiguous(), meta_labels.to(device_ids[0]))
+class DuplicatedCompose(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img):
+        img1 = img.copy()
+        img2 = img.copy()
+        for t in self.transforms:
+            img1 = t(img1)
+            img2 = t(img2)
+        return img1, img2
+
+
+def momentum_update(model_q, model_k, beta=0.999):
+    param_k = model_k.state_dict()
+    param_q = model_q.named_parameters()
+    for n, q in param_q:
+        if n in param_k:
+            param_k[n].data.copy_(beta * param_k[n].data + (1 - beta) * q.data)
+    model_k.load_state_dict(param_k)
+
+
+def queue_data(data, k):
+    return torch.cat([data, k], dim=0)
+
+
+def dequeue_data(data, K=4096):
+    if len(data) > K:
+        return data[-K:]
+    else:
+        return data
+
+
+def initialize_queue(model_k, device, train_loader):
+    queue = torch.zeros((0, 128), dtype=torch.float)
+    queue = queue.to(device)
+
+    for batch_idx, (data, target) in enumerate(train_loader):
+        x_k = data[1]
+        x_k = x_k.to(device)
+        k = model_k(x_k)
+        k = k.detach()
+        queue = queue_data(queue, k)
+        queue = dequeue_data(queue, K=10)
+        break
+    return queue
+
+
+def train(model_q, model_k, device, train_loader, queue, optimizer, epoch, temp=0.07):
+    model_q.train()
+    total_loss = 0
+
+    for batch_idx, (data, target) in enumerate(train_loader):
+        x_q = data[0]
+        x_k = data[1]
+
+        x_q, x_k = x_q.to(device), x_k.to(device)
+        q = model_q(x_q)
+        k = model_k(x_k)
+        k = k.detach()
+
+        N = data[0].shape[0]
+        K = queue.shape[0]
+        l_pos = torch.bmm(q.view(N, 1, -1), k.view(N, -1, 1))
+        l_neg = torch.mm(q.view(N, -1), queue.T.view(-1, K))
+
+        logits = torch.cat([l_pos.view(N, 1), l_neg], dim=1)
+
+        labels = torch.zeros(N, dtype=torch.long)
+        labels = labels.to(device)
+
+        cross_entropy_loss = nn.CrossEntropyLoss()
+        loss = cross_entropy_loss(logits / temp, labels)
+
+        optimizer.zero_grad()
         loss.backward()
-        optim.step()
-        pred = torch.argmax(out, dim=-1)
-        n_data += len(labels)
-        l_data += loss.item() * len(labels)
-        t_data += torch.sum((pred.cpu() == meta_labels).float()).item() / ENSEMBLE_SIZE
-        train_progress.set_description('Epoch {}/{} - Training Loss:{:.4f} - Training Acc:{:.2f}%'
-                                       .format(epoch, NUM_EPOCHS, l_data / n_data, t_data / n_data * 100))
+        optimizer.step()
 
-    return l_data / n_data, t_data / n_data * 100
+        total_loss += loss.item()
 
+        momentum_update(model_q, model_k)
 
-def val(net):
-    net.eval()
-    with torch.no_grad():
-        l_data, t_data, n_data, val_progress = 0, 0, 0, tqdm(val_data_loader)
-        for inputs, labels in val_progress:
-            out = net(inputs.to(device_ids[0]))
-            meta_labels = meta_ids[labels]
-            loss = cel_criterion(out.permute(0, 2, 1).contiguous(), meta_labels.to(device_ids[0]))
-            n_data += len(labels)
-            l_data += loss.item() * len(labels)
-            out = F.normalize(out, dim=-1)
-            sim_matrix = (out.cpu()[:, None, :, None, :] @ memory_bank_vectors[None, :, :, :, None]).squeeze(
-                dim=-1).squeeze(dim=-1).mean(dim=-1)
-            idx = sim_matrix.argsort(dim=-1, descending=True)
-            t_data += (
-                torch.sum((memory_bank_labels[idx[:, 0:1]] == labels.unsqueeze(dim=-1)).any(dim=-1).float())).item()
-            val_progress.set_description('Epoch {}/{} - Val Loss:{:.4f} - Val Acc:{:.2f}%'
-                                         .format(epoch, NUM_EPOCHS, l_data / n_data, t_data / n_data * 100))
+        queue = queue_data(queue, k)
+        queue = dequeue_data(queue)
 
-    return l_data / n_data, t_data / n_data * 100
+    total_loss /= len(train_loader.dataset)
+
+    print('Train Epoch: {} \tLoss: {:.6f}'.format(epoch, total_loss))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train ShadowMode')
-    parser.add_argument('--data_path', default='/home/data/uisee/shadow_mode', type=str, help='path to dataset')
-    parser.add_argument('--with_random', action='store_true', help='with branch random weight or not')
-    parser.add_argument('--load_ids', action='store_true', help='load already generated ids or not')
-    parser.add_argument('--batch_size', default=32, type=int, help='train batch size')
-    parser.add_argument('--num_epochs', default=40, type=int, help='train epoch number')
-    parser.add_argument('--ensemble_size', default=12, type=int, help='ensemble model size')
-    parser.add_argument('--meta_class_size', default=6, type=int, help='meta class size')
-    parser.add_argument('--gpu_ids', default='0,1', type=str, help='selected gpu')
+    parser = argparse.ArgumentParser(description='MoCo example: MNIST')
+    parser.add_argument('--batchsize', '-b', type=int, default=100,
+                        help='Number of images in each mini-batch')
+    parser.add_argument('--epochs', '-e', type=int, default=50,
+                        help='Number of sweeps over the dataset to train')
+    parser.add_argument('--out', '-o', default='result',
+                        help='Directory to output the result')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                        help='disables CUDA training')
+    args = parser.parse_args()
 
-    opt = parser.parse_args()
+    batchsize = args.batchsize
+    epochs = args.epochs
+    out_dir = args.out
 
-    BATCH_SIZE, NUM_EPOCHS, LOAD_IDS, GPU_IDS = opt.batch_size, opt.num_epochs, opt.load_ids, opt.gpu_ids
-    ENSEMBLE_SIZE, META_CLASS_SIZE, WITH_RANDOM = opt.ensemble_size, opt.meta_class_size, opt.with_random
-    random_flag = 'random' if WITH_RANDOM else 'unrandom'
-    DATA_PATH, device_ids = opt.data_path, [int(gpu) for gpu in GPU_IDS.split(',')]
+    use_cuda = not args.no_cuda and torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
 
-    train_data_set = ImageFolder(root='{}/{}'.format(DATA_PATH, 'train'), transform=train_transform)
-    train_data_loader = DataLoader(train_data_set, BATCH_SIZE, shuffle=True, num_workers=8, pin_memory=True)
-    val_data_set = ImageFolder(root='{}/{}'.format(DATA_PATH, 'val'), transform=val_transform)
-    val_data_loader = DataLoader(val_data_set, BATCH_SIZE, shuffle=False, num_workers=8, pin_memory=True)
+    kwargs = {'num_workers': 4, 'pin_memory': True}
 
-    model = DataParallel(Model(META_CLASS_SIZE, ENSEMBLE_SIZE, WITH_RANDOM).to(device_ids[0]), device_ids=device_ids)
-    print("# trainable parameters:", sum(param.numel() if param.requires_grad else 0 for param in model.parameters()))
-    optimizer = Adam(model.parameters(), lr=1e-4)
-    lr_scheduler = MultiStepLR(optimizer, milestones=[int(NUM_EPOCHS * 0.5), int(NUM_EPOCHS * 0.7)], gamma=0.1)
-    cel_criterion = CrossEntropyLoss()
+    transform = DuplicatedCompose([
+        transforms.RandomRotation(20),
+        transforms.RandomResizedCrop(28, scale=(0.9, 1.1), ratio=(0.9, 1.1), interpolation=2),
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))])
 
-    save_name_pre = '{}_{}_{}'.format(random_flag, ENSEMBLE_SIZE, META_CLASS_SIZE)
-    ids_name = 'results/{}_{}_ids.pth'.format(ENSEMBLE_SIZE, META_CLASS_SIZE)
-    if LOAD_IDS:
-        if os.path.exists(ids_name):
-            meta_ids = torch.load(ids_name)
-        else:
-            raise FileNotFoundError('{} is not exist'.format(ids_name))
-    else:
-        meta_ids = assign_meta_id(META_CLASS_SIZE, len(train_data_set.classes), ENSEMBLE_SIZE)
-        torch.save(meta_ids, ids_name)
-    meta_ids = torch.tensor(meta_ids)
-    results = {'train_loss': [], 'train_accuracy': [], 'val_loss': [], 'val_accuracy': []}
+    train_mnist = datasets.MNIST('./', train=True, download=True, transform=transform)
+    test_mnist = datasets.MNIST('./', train=False, download=True, transform=transform)
 
-    best_acc = 0
-    for epoch in range(1, NUM_EPOCHS + 1):
-        memory_bank_vectors, memory_bank_labels = [], []
-        train_loss, train_accuracy = train(model, optimizer)
-        results['train_loss'].append(train_loss)
-        results['train_accuracy'].append(train_accuracy)
-        lr_scheduler.step(epoch)
-        memory_bank_vectors = torch.stack(memory_bank_vectors)
-        memory_bank_labels = torch.stack(memory_bank_labels)
+    train_loader = torch.utils.data.DataLoader(train_mnist, batch_size=batchsize, shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(test_mnist, batch_size=batchsize, shuffle=True, **kwargs)
 
-        val_loss, val_accuracy = val(model)
-        results['val_loss'].append(val_loss)
-        results['val_accuracy'].append(val_accuracy)
-        # save statistics
-        data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/{}_results.csv'.format(save_name_pre), index_label='epoch')
-        if val_accuracy > best_acc:
-            best_acc = val_accuracy
-            torch.save(model.module.state_dict(), 'epochs/{}_model.pth'.format(save_name_pre))
+    model_q = Net().to(device)
+    model_k = Net().to(device)
+    optimizer = optim.SGD(model_q.parameters(), lr=0.01, weight_decay=0.0001)
+
+    queue = initialize_queue(model_k, device, train_loader)
+
+    for epoch in range(1, epochs + 1):
+        train(model_q, model_k, device, train_loader, queue, optimizer, epoch)
+
+    os.makedirs(out_dir, exist_ok=True)
+    torch.save(model_q.state_dict(), os.path.join(out_dir, 'model.pth'))
