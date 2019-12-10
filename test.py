@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
-    model_type, features_dim = model_path.split('_')[-3], model_path.split('_')[-2]
+    model_type, features_dim = model_path.split('_')[-3], int(model_path.split('_')[-2])
     train_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'train'), transform=utils.train_transform)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     test_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'val'), transform=utils.test_transform)
