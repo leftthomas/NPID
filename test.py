@@ -61,19 +61,18 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, default='/home/data/imagenet/ILSVRC2012', help='Path to dataset')
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--features_dim', type=int, default=128, help='Dim of features for each image')
-    parser.add_argument('--model', type=str, default='epochs/features_extractor_128_65536.pth',
+    parser.add_argument('--model', type=str, default='epochs/features_extractor_resnet18_128_65536.pth',
                         help='Features extractor file')
 
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
-    features_dim = args.features_dim
+    model_type, features_dim = model_path.split('_')[-3], model_path.split('_')[-2]
     train_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'train'), transform=utils.train_transform)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     test_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'val'), transform=utils.test_transform)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-    features_extractor = Net()
+    features_extractor = Net(model_type, features_dim)
     features_extractor.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     for param in features_extractor.parameters():
         param.requires_grad = False
@@ -95,7 +94,7 @@ if __name__ == '__main__':
         results['test_acc@5'].append(test_acc5)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/model_{}_results.csv'.format(features_dim), index_label='epoch')
+        data_frame.to_csv('results/model_{}_{}_results.csv'.format(model_type, features_dim), index_label='epoch')
         if test_acc1 > best_acc:
             best_acc = test_acc1
-            torch.save(model.state_dict(), 'epochs/model_{}.pth'.format(features_dim))
+            torch.save(model.state_dict(), 'epochs/model_{}_{}.pth'.format(model_type, features_dim))

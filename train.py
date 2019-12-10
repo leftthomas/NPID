@@ -23,7 +23,7 @@ def initialize_queue(model_k, train_loader):
         x_k = data[1].to('cuda')
         k = model_k(x_k).detach()
         queue = utils.queue_data(queue, k)
-        queue = utils.dequeue_data(queue, k=dictionary_size)
+        queue = utils.dequeue_data(queue, dictionary_size)
         break
     return queue
 
@@ -56,7 +56,7 @@ def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
         utils.momentum_update(model_q, model_k)
 
         queue = utils.queue_data(queue, k)
-        queue = utils.dequeue_data(queue)
+        queue = utils.dequeue_data(queue, dictionary_size)
         train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.6f}'.format(epoch, epochs, total_loss / n_data))
 
     return total_loss / n_data
@@ -65,6 +65,8 @@ def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--data_path', type=str, default='/home/data/imagenet/ILSVRC2012', help='Path to dataset')
+    parser.add_argument('--model_type', default='resnet18', type=str,
+                        choices=['resnet18', 'resnet50'], help='Backbone type')
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=200, help='Number of sweeps over the dataset to train')
     parser.add_argument('--features_dim', type=int, default=128, help='Dim of features for each image')
@@ -72,11 +74,11 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     batch_size, epochs, features_dim, data_path = args.batch_size, args.epochs, args.features_dim, args.data_path
-    dictionary_size = args.dictionary_size
+    dictionary_size, model_type = args.dictionary_size, args.model_type
     train_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'train'), transform=utils.train_transform)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
-    model_q, model_k = Net(features_dim).to('cuda'), Net(features_dim).to('cuda')
+    model_q, model_k = Net(model_type, features_dim).to('cuda'), Net(model_type, features_dim).to('cuda')
     optimizer = optim.SGD(model_q.parameters(), lr=0.03, momentum=0.9, weight_decay=0.0001)
     print("# trainable parameters:", sum(param.numel() if param.requires_grad else 0 for param in model_q.parameters()))
     lr_scheduler = MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
@@ -91,10 +93,11 @@ if __name__ == '__main__':
         results['train_loss'].append(current_loss)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/features_extractor_{}_{}_results.csv'.format(features_dim, dictionary_size),
-                          index_label='epoch')
+        data_frame.to_csv(
+            'results/features_extractor_{}_{}_{}_results.csv'.format(model_type, features_dim, dictionary_size),
+            index_label='epoch')
         lr_scheduler.step(epoch)
         if current_loss < min_loss:
             min_loss = current_loss
-            torch.save(model_q.state_dict(), 'epochs/features_extractor_{}_{}.pth'
-                       .format(features_dim, dictionary_size))
+            torch.save(model_q.state_dict(), 'epochs/features_extractor_{}_{}_{}.pth'
+                       .format(model_type, features_dim, dictionary_size))

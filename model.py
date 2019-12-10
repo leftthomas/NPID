@@ -1,12 +1,15 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models.resnet import resnet18
+from torchvision.models.resnet import resnet18, resnet50
 
 
 class Net(nn.Module):
-    def __init__(self, features_dim=128):
+    def __init__(self, model_type, features_dim=128):
         super(Net, self).__init__()
-        self.features_extractor = resnet18()
+        if model_type is 'resnet18':
+            self.features_extractor = resnet18()
+        else:
+            self.features_extractor = resnet50()
         self.features_extractor.fc = nn.Linear(512, features_dim)
 
     def forward(self, x):

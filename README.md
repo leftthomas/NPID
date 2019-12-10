@@ -21,6 +21,7 @@ conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
 python train.py --epochs 50 --dictionary_size 4096
 optional arguments:
 --data_path                   Path to dataset [default value is '/home/data/imagenet/ILSVRC2012']
+--model_type                  Backbone type [default value is 'resnet18'] (choices=['resnet18', 'resnet50'])
 --batch_size                  Number of images in each mini-batch [default value is 256]
 --epochs                      Number of sweeps over the dataset to train [default value is 200]
 --features_dim                Dim of features for each image [default value is 128]
@@ -29,11 +30,10 @@ optional arguments:
 
 ### Train Model
 ```
-python test.py --epochs 100 --features_dim 256
+python test.py --epochs 100 --batch_size 512
 optional arguments:
 --data_path                   Path to dataset [default value is '/home/data/imagenet/ILSVRC2012']
 --batch_size                  Number of images in each mini-batch [default value is 256]
 --epochs                      Number of sweeps over the dataset to train [default value is 100]
---features_dim                Dim of features for each image [default value is 128]
---model                       Features extractor file [default value is 'epochs/features_extractor_128_65536.pth']
+--model                       Features extractor file [default value is 'epochs/features_extractor_resnet18_128_65536.pth']
 ```
