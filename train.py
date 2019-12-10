@@ -1,4 +1,5 @@
 import argparse
+import warnings
 
 import pandas as pd
 import torch
@@ -11,6 +12,8 @@ from tqdm import tqdm
 
 import utils
 from model import Net
+
+warnings.filterwarnings("ignore")
 
 
 def initialize_queue(model_k, train_loader):
@@ -27,9 +30,7 @@ def initialize_queue(model_k, train_loader):
 
 def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
     model_q.train()
-    total_loss, n_data = 0, 0
-
-    train_bar = tqdm(train_loader)
+    total_loss, n_data, train_bar = 0, 0, tqdm(train_loader)
     for data, target in train_bar:
         x_q, x_k = data
         x_q, x_k = x_q.to('cuda'), x_k.to('cuda')
@@ -77,6 +78,7 @@ if __name__ == '__main__':
 
     model_q, model_k = Net(features_dim).to('cuda'), Net(features_dim).to('cuda')
     optimizer = optim.SGD(model_q.parameters(), lr=0.03, momentum=0.9, weight_decay=0.0001)
+    print("# trainable parameters:", sum(param.numel() if param.requires_grad else 0 for param in model_q.parameters()))
     lr_scheduler = MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
     cross_entropy_loss = nn.CrossEntropyLoss()
     results = {'train_loss': []}
@@ -89,8 +91,9 @@ if __name__ == '__main__':
         results['train_loss'].append(current_loss)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/{}_{}_results.csv'.format(features_dim, dictionary_size), index_label='epoch')
+        data_frame.to_csv('results/{}_{}_features_extractor_results.csv'.format(features_dim, dictionary_size),
+                          index_label='epoch')
         lr_scheduler.step(epoch)
         if current_loss < min_loss:
             min_loss = current_loss
-            torch.save(model_q.state_dict(), 'epochs/model.pth')
+            torch.save(model_q.state_dict(), 'epochs/features_extractor.pth')
