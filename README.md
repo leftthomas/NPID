@@ -35,5 +35,5 @@ optional arguments:
 --batch_size                  Number of images in each mini-batch [default value is 256]
 --epochs                      Number of sweeps over the dataset to train [default value is 100]
 --features_dim                Dim of features for each image [default value is 128]
---model                       Features extractor file [default value is 'epochs/features_extractor.pth']
+--model                       Features extractor file [default value is 'epochs/features_extractor_128_65536.pth']
 ```

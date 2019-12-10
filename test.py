@@ -62,7 +62,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
     parser.add_argument('--features_dim', type=int, default=128, help='Dim of features for each image')
-    parser.add_argument('--model', type=str, default='epochs/features_extractor.pth', help='Features extractor file')
+    parser.add_argument('--model', type=str, default='epochs/features_extractor_128_65536.pth',
+                        help='Features extractor file')
 
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
@@ -94,7 +95,7 @@ if __name__ == '__main__':
         results['test_acc@5'].append(test_acc5)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/{}_model_results.csv'.format(features_dim), index_label='epoch')
+        data_frame.to_csv('results/model_{}_results.csv'.format(features_dim), index_label='epoch')
         if test_acc1 > best_acc:
             best_acc = test_acc1
-            torch.save(model.state_dict(), 'epochs/model.pth')
+            torch.save(model.state_dict(), 'epochs/model_{}.pth'.format(features_dim))

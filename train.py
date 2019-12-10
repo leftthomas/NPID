@@ -91,9 +91,10 @@ if __name__ == '__main__':
         results['train_loss'].append(current_loss)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/{}_{}_features_extractor_results.csv'.format(features_dim, dictionary_size),
+        data_frame.to_csv('results/features_extractor_{}_{}_results.csv'.format(features_dim, dictionary_size),
                           index_label='epoch')
         lr_scheduler.step(epoch)
         if current_loss < min_loss:
             min_loss = current_loss
-            torch.save(model_q.state_dict(), 'epochs/features_extractor.pth')
+            torch.save(model_q.state_dict(), 'epochs/features_extractor_{}_{}.pth'
+                       .format(features_dim, dictionary_size))
