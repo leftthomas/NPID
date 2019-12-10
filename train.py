@@ -3,6 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from tqdm import tqdm
@@ -48,13 +49,13 @@ def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
         optimizer.step()
 
         n_data += N
-        total_loss += loss.item()
+        total_loss += loss.item() * N
 
         utils.momentum_update(model_q, model_k)
 
         queue = utils.queue_data(queue, k)
         queue = utils.dequeue_data(queue)
-        train_bar.set_description('Train Epoch: {} Loss: {:.6f}'.format(epoch, total_loss / n_data))
+        train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.6f}'.format(epoch, epochs, total_loss / n_data))
 
     return total_loss / n_data
 
@@ -62,10 +63,10 @@ def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--data_path', default='/home/data/imagenet/ILSVRC2012', type=str, help='path to dataset')
-    parser.add_argument('--batch_size', '-b', type=int, default=64, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', '-e', type=int, default=50, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--batch_size', '-b', type=int, default=256, help='Number of images in each mini-batch')
+    parser.add_argument('--epochs', '-e', type=int, default=200, help='Number of sweeps over the dataset to train')
     parser.add_argument('--features_dim', '-f', type=int, default=128, help='Dim of features for each image')
-    parser.add_argument('--dictionary_size', '-d', type=int, default=32, help='Size of dictionary')
+    parser.add_argument('--dictionary_size', '-d', type=int, default=65536, help='Size of dictionary')
     args = parser.parse_args()
 
     batch_size, epochs, features_dim, data_path = args.batch_size, args.epochs, args.features_dim, args.data_path
@@ -74,7 +75,8 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     model_q, model_k = Net(features_dim).to('cuda'), Net(features_dim).to('cuda')
-    optimizer = optim.Adam(model_q.parameters(), lr=0.001, weight_decay=0.0001)
+    optimizer = optim.SGD(model_q.parameters(), lr=0.03, momentum=0.9, weight_decay=0.0001)
+    lr_scheduler = MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
     cross_entropy_loss = nn.CrossEntropyLoss()
 
     queue = initialize_queue(model_k, train_loader)
@@ -82,6 +84,7 @@ if __name__ == '__main__':
     min_loss = float("inf")
     for epoch in range(1, epochs + 1):
         current_loss = train(model_q, model_k, train_loader, queue, optimizer, epoch)
+        lr_scheduler.step(epoch)
         if current_loss < min_loss:
             min_loss = current_loss
             torch.save(model_q.state_dict(), 'epochs/model.pth')
