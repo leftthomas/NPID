@@ -1,11 +1,11 @@
 import argparse
-import os
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
+from tqdm import tqdm
 
 import utils
 from model import Net
@@ -14,7 +14,7 @@ from model import Net
 def initialize_queue(model_k, train_loader):
     queue = torch.zeros((0, features_dim), dtype=torch.float).to('cuda')
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for data, target in train_loader:
         x_k = data[1].to('cuda')
         k = model_k(x_k).detach()
         queue = utils.queue_data(queue, k)
@@ -25,44 +25,38 @@ def initialize_queue(model_k, train_loader):
 
 def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
     model_q.train()
-    total_loss = 0
+    total_loss, n_data = 0, 0
 
-    for batch_idx, (data, target) in enumerate(train_loader):
-        x_q = data[0]
-        x_k = data[1]
-
+    train_bar = tqdm(train_loader)
+    for data, target in train_bar:
+        x_q, x_k = data
         x_q, x_k = x_q.to('cuda'), x_k.to('cuda')
-        q = model_q(x_q)
-        k = model_k(x_k)
-        k = k.detach()
 
-        N = data[0].shape[0]
-        K = queue.shape[0]
+        q = model_q(x_q)
+        k = model_k(x_k).detach()
+
+        N, K = x_q.shape[0], queue.shape[0]
         l_pos = torch.bmm(q.view(N, 1, -1), k.view(N, -1, 1))
         l_neg = torch.mm(q.view(N, -1), queue.T.view(-1, K))
 
         logits = torch.cat([l_pos.view(N, 1), l_neg], dim=1)
-
-        labels = torch.zeros(N, dtype=torch.long)
-        labels = labels.to('cuda')
-
-        cross_entropy_loss = nn.CrossEntropyLoss()
+        labels = torch.zeros(N, dtype=torch.long).to('cuda')
         loss = cross_entropy_loss(logits / temp, labels)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+        n_data += N
         total_loss += loss.item()
 
         utils.momentum_update(model_q, model_k)
 
         queue = utils.queue_data(queue, k)
         queue = utils.dequeue_data(queue)
+        train_bar.set_description('Train Epoch: {} Loss: {:.6f}'.format(epoch, total_loss / n_data))
 
-    total_loss /= len(train_loader.dataset)
-
-    print('Train Epoch: {} \tLoss: {:.6f}'.format(epoch, total_loss))
+    return total_loss / n_data
 
 
 if __name__ == '__main__':
@@ -81,9 +75,13 @@ if __name__ == '__main__':
 
     model_q, model_k = Net(features_dim).to('cuda'), Net(features_dim).to('cuda')
     optimizer = optim.Adam(model_q.parameters(), lr=0.001, weight_decay=0.0001)
+    cross_entropy_loss = nn.CrossEntropyLoss()
 
     queue = initialize_queue(model_k, train_loader)
 
+    min_loss = float("inf")
     for epoch in range(1, epochs + 1):
-        train(model_q, model_k, train_loader, queue, optimizer, epoch)
-        torch.save(model_q.state_dict(), os.path.join('epochs/model.pth'))
+        current_loss = train(model_q, model_k, train_loader, queue, optimizer, epoch)
+        if current_loss < min_loss:
+            min_loss = current_loss
+            torch.save(model_q.state_dict(), 'epochs/model.pth')
