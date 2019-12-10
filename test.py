@@ -29,7 +29,7 @@ def show(mnist, targets, ret):
         ax.add_artist(AnnotationBbox(img, ret[i]))
 
     plt.legend()
-    plt.show()
+    plt.savefig('results/tsne.png')
 
 
 if __name__ == '__main__':

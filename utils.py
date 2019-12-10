@@ -1,51 +1,49 @@
-import math
-import random
-from itertools import product
-
-from torchvision import transforms
-
-normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-train_transform = transforms.Compose(
-    [transforms.Resize(512), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize])
-val_transform = transforms.Compose([transforms.Resize(512), transforms.ToTensor(), normalize])
+import torch
 
 
-# random assign meta class for all classes
-def assign_meta_id(meta_class_size, num_class, ensemble_size):
-    assert math.pow(meta_class_size, ensemble_size) >= num_class, 'make sure meta_class_size^ensemble_size >= num_class'
-    assert meta_class_size <= num_class, 'make sure meta_class_size <= num_class'
+class DuplicatedCompose(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
 
-    multiple = num_class // meta_class_size
-    remain = num_class % meta_class_size
-    if remain != 0:
-        multiple += 1
+    def __call__(self, img):
+        img1 = img.copy()
+        img2 = img.copy()
+        for t in self.transforms:
+            img1 = t(img1)
+            img2 = t(img2)
+        return img1, img2
 
-    max_try, i, assign_flag = 10, 0, False
-    while i < max_try:
-        idxes = []
-        for _ in range(ensemble_size):
-            idx_all = []
-            for _ in range(multiple):
-                idx_base = [j for j in range(meta_class_size)]
-                random.shuffle(idx_base)
-                idx_all += idx_base
 
-            idx_all = idx_all[:num_class]
-            random.shuffle(idx_all)
-            idxes.append(idx_all)
-        check_list = list(zip(*idxes))
-        i += 1
-        if len(check_list) != len(set(check_list)):
-            print('try to random assign labels again ({}/{})'.format(i, max_try))
-            assign_flag = False
-        else:
-            assign_flag = True
-            break
+def momentum_update(model_q, model_k, beta=0.999):
+    param_k = model_k.state_dict()
+    param_q = model_q.named_parameters()
+    for n, q in param_q:
+        if n in param_k:
+            param_k[n].data.copy_(beta * param_k[n].data + (1 - beta) * q.data)
+    model_k.load_state_dict(param_k)
 
-    if not assign_flag:
-        remained = set(check_list)
-        idx_all = set(product(range(meta_class_size), repeat=ensemble_size))
-        added = set(random.sample(idx_all - remained, num_class - len(remained)))
-        idxes = list(zip(*(added | remained)))
 
-    return list(zip(*idxes))
+def queue_data(data, k):
+    return torch.cat([data, k], dim=0)
+
+
+def dequeue_data(data, K=4096):
+    if len(data) > K:
+        return data[-K:]
+    else:
+        return data
+
+
+def initialize_queue(model_k, device, train_loader):
+    queue = torch.zeros((0, 128), dtype=torch.float)
+    queue = queue.to(device)
+
+    for batch_idx, (data, target) in enumerate(train_loader):
+        x_k = data[1]
+        x_k = x_k.to(device)
+        k = model_k(x_k)
+        k = k.detach()
+        queue = queue_data(queue, k)
+        queue = dequeue_data(queue, K=10)
+        break
+    return queue
