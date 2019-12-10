@@ -1,37 +1,11 @@
 import argparse
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import tqdm
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from sklearn.manifold import TSNE
 from torchvision import datasets
 
 import utils
 from model import Net
-
-
-def show(mnist, targets, ret):
-    target_ids = range(len(set(targets)))
-
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'violet', 'orange', 'purple']
-
-    plt.figure(figsize=(12, 10))
-
-    ax = plt.subplot(aspect='equal')
-    for label in set(targets):
-        idx = np.where(np.array(targets) == label)[0]
-        plt.scatter(ret[idx, 0], ret[idx, 1], c=colors[label], label=label)
-
-    for i in range(0, len(targets), 250):
-        img = (mnist[i][0] * 0.3081 + 0.1307).numpy()[0]
-        img = OffsetImage(img, cmap=plt.cm.gray_r, zoom=0.5)
-        ax.add_artist(AnnotationBbox(img, ret[i]))
-
-    plt.legend()
-    plt.savefig('results/tsne.png')
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Test MoCo')
@@ -56,6 +30,4 @@ if __name__ == '__main__':
         feat = model(x.to('cuda'))
         data.append(feat.cpu().data.numpy()[0])
 
-    ret = TSNE(n_components=2, random_state=0).fit_transform(data)
 
-    show(mnist, targets, ret)

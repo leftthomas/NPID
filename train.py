@@ -1,5 +1,6 @@
 import argparse
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -78,12 +79,17 @@ if __name__ == '__main__':
     optimizer = optim.SGD(model_q.parameters(), lr=0.03, momentum=0.9, weight_decay=0.0001)
     lr_scheduler = MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
     cross_entropy_loss = nn.CrossEntropyLoss()
+    results = {'train_loss': []}
 
     queue = initialize_queue(model_k, train_loader)
 
     min_loss = float("inf")
     for epoch in range(1, epochs + 1):
         current_loss = train(model_q, model_k, train_loader, queue, optimizer, epoch)
+        results['train_loss'].append(current_loss)
+        # save statistics
+        data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
+        data_frame.to_csv('results/{}_{}_results.csv'.format(features_dim, dictionary_size), index_label='epoch')
         lr_scheduler.step(epoch)
         if current_loss < min_loss:
             min_loss = current_loss
