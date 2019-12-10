@@ -76,7 +76,7 @@ if __name__ == '__main__':
     features_extractor.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     for param in features_extractor.parameters():
         param.requires_grad = False
-    model = nn.Sequential(features_extractor, nn.Linear(features_dim, len(train_data)))
+    model = nn.Sequential(features_extractor, nn.Linear(features_dim, len(train_data.classes)))
     model = model.to('cuda')
     optimizer = optim.SGD(model.parameters(), lr=30, momentum=0.9, weight_decay=0)
     cross_entropy_loss = nn.CrossEntropyLoss()
