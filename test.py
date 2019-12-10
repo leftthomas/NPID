@@ -6,8 +6,9 @@ import torch
 import tqdm
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.manifold import TSNE
-from torchvision import datasets, transforms
+from torchvision import datasets
 
+import utils
 from model import Net
 
 
@@ -33,20 +34,17 @@ def show(mnist, targets, ret):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='MoCo example: MNIST')
-    parser.add_argument('--model', '-m', default='result/model.pth',
-                        help='Model file')
+    parser = argparse.ArgumentParser(description='Test MoCo')
+    parser.add_argument('--model', '-m', default='epochs/model.pth', help='Model file')
     args = parser.parse_args()
     model_path = args.model
-
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))])
+    transform = utils.test_transform
 
     mnist = datasets.MNIST('./', train=False, download=True, transform=transform)
 
     model = Net()
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model = model.to('cuda')
 
     data = []
     targets = []
@@ -55,8 +53,8 @@ if __name__ == '__main__':
         targets.append(target)
         x = m[0]
         x = x.view(1, *x.shape)
-        feat = model(x)
-        data.append(feat.data.numpy()[0])
+        feat = model(x.to('cuda'))
+        data.append(feat.cpu().data.numpy()[0])
 
     ret = TSNE(n_components=2, random_state=0).fit_transform(data)
 

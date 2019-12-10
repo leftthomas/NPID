@@ -1,4 +1,5 @@
 import torch
+from torchvision import transforms
 
 
 class DuplicatedCompose(object):
@@ -14,6 +15,30 @@ class DuplicatedCompose(object):
         return img1, img2
 
 
+train_transform = DuplicatedCompose([
+    transforms.RandomResizedCrop(224, scale=(0.9, 1.1), ratio=(0.9, 1.1)),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
+test_transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
+
+def queue_data(data, k):
+    return torch.cat([data, k], dim=0)
+
+
+def dequeue_data(data, k=4096):
+    if len(data) > k:
+        return data[-k:]
+    else:
+        return data
+
+
 def momentum_update(model_q, model_k, beta=0.999):
     param_k = model_k.state_dict()
     param_q = model_q.named_parameters()
@@ -21,29 +46,3 @@ def momentum_update(model_q, model_k, beta=0.999):
         if n in param_k:
             param_k[n].data.copy_(beta * param_k[n].data + (1 - beta) * q.data)
     model_k.load_state_dict(param_k)
-
-
-def queue_data(data, k):
-    return torch.cat([data, k], dim=0)
-
-
-def dequeue_data(data, K=4096):
-    if len(data) > K:
-        return data[-K:]
-    else:
-        return data
-
-
-def initialize_queue(model_k, device, train_loader):
-    queue = torch.zeros((0, 128), dtype=torch.float)
-    queue = queue.to(device)
-
-    for batch_idx, (data, target) in enumerate(train_loader):
-        x_k = data[1]
-        x_k = x_k.to(device)
-        k = model_k(x_k)
-        k = k.detach()
-        queue = queue_data(queue, k)
-        queue = dequeue_data(queue, K=10)
-        break
-    return queue
