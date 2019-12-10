@@ -7,10 +7,10 @@ class Net(nn.Module):
     def __init__(self, model_type, features_dim=128):
         super(Net, self).__init__()
         if model_type is 'resnet18':
-            self.features_extractor = resnet18()
+            self.features_extractor, expand = resnet18(), 1
         else:
-            self.features_extractor = resnet50()
-        self.features_extractor.fc = nn.Linear(512, features_dim)
+            self.features_extractor, expand = resnet50(), 4
+        self.features_extractor.fc = nn.Linear(512 * expand, features_dim)
 
     def forward(self, x):
         features = self.features_extractor(x)
