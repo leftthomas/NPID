@@ -64,13 +64,13 @@ def train(model_q, model_k, train_loader, queue, optimizer, epoch, temp=0.07):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
-    parser.add_argument('--data_path', default='/home/data/imagenet/ILSVRC2012', type=str, help='path to dataset')
-    parser.add_argument('--batch_size', '-b', type=int, default=256, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', '-e', type=int, default=200, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--features_dim', '-f', type=int, default=128, help='Dim of features for each image')
-    parser.add_argument('--dictionary_size', '-d', type=int, default=65536, help='Size of dictionary')
-    args = parser.parse_args()
+    parser.add_argument('--data_path', type=str, default='/home/data/imagenet/ILSVRC2012', help='Path to dataset')
+    parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--features_dim', type=int, default=128, help='Dim of features for each image')
+    parser.add_argument('--dictionary_size', type=int, default=65536, help='Size of dictionary')
 
+    args = parser.parse_args()
     batch_size, epochs, features_dim, data_path = args.batch_size, args.epochs, args.features_dim, args.data_path
     dictionary_size = args.dictionary_size
     train_data = datasets.ImageFolder(root='{}/{}'.format(data_path, 'train'), transform=utils.train_transform)

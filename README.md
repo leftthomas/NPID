@@ -16,16 +16,24 @@ conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
 `Uisee` dataset is used in this repo.
 
 ## Usage
+### Train Features Extractor
+```
+python train.py --epochs 50 --dictionary_size 4096
+optional arguments:
+--data_path                   Path to dataset [default value is '/home/data/imagenet/ILSVRC2012']
+--batch_size                  Number of images in each mini-batch [default value is 256]
+--epochs                      Number of sweeps over the dataset to train [default value is 200]
+--features_dim                Dim of features for each image [default value is 128]
+--dictionary_size             Size of dictionary [default value is 65536]
+```
+
 ### Train Model
 ```
-python train.py --num_epochs 50 --load_ids
+python test.py --epochs 100 --features_dim 256
 optional arguments:
---data_path                   path to dataset [default value is '/home/data/uisee/shadow_mode']
---with_random                 with branch random weight or not [default value is False]
---load_ids                    load already generated ids or not [default value is False]
---batch_size                  train batch size [default value is 32]
---num_epochs                  train epochs number [default value is 40]
---ensemble_size               ensemble model size [default value is 12]
---meta_class_size             meta class size [default value is 6]
---gpu_ids                     selected gpu [default value is '0,1']
+--data_path                   Path to dataset [default value is '/home/data/imagenet/ILSVRC2012']
+--batch_size                  Number of images in each mini-batch [default value is 256]
+--epochs                      Number of sweeps over the dataset to train [default value is 100]
+--features_dim                Dim of features for each image [default value is 128]
+--model                       Features extractor file [default value is 'epochs/features_extractor.pth']
 ```

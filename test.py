@@ -58,11 +58,11 @@ def test(model, test_loader, epoch):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Test MoCo')
-    parser.add_argument('--data_path', default='/home/data/imagenet/ILSVRC2012', type=str, help='path to dataset')
-    parser.add_argument('--batch_size', '-b', type=int, default=256, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', '-e', type=int, default=100, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--features_dim', '-f', type=int, default=128, help='Dim of features for each image')
-    parser.add_argument('--model', '-m', default='epochs/features_extractor.pth', help='Features extractor file')
+    parser.add_argument('--data_path', type=str, default='/home/data/imagenet/ILSVRC2012', help='Path to dataset')
+    parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--features_dim', type=int, default=128, help='Dim of features for each image')
+    parser.add_argument('--model', type=str, default='epochs/features_extractor.pth', help='Features extractor file')
 
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
