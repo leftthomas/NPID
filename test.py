@@ -15,6 +15,7 @@ from model import Model
 warnings.filterwarnings("ignore")
 
 
+# train for one epoch, use original class to train
 def train(model, train_loader, optimizer, epoch):
     model.train()
     total_loss, total_true, n_data, train_bar = 0.0, 0.0, 0, tqdm(train_loader)
@@ -36,6 +37,7 @@ def train(model, train_loader, optimizer, epoch):
     return total_loss / n_data, total_true / n_data * 100
 
 
+# test for on epoch, same as traditional method
 def test(model, test_loader, epoch):
     model.eval()
     total_loss, total_top1, total_top5, n_data, test_bar = 0.0, 0.0, 0.0, 0, tqdm(test_loader)
@@ -68,6 +70,7 @@ if __name__ == '__main__':
                         help='Features extractor file')
     parser.add_argument('--gpu_ids', default='0,1,2,3,4,5,6,7', type=str, help='Selected gpu')
 
+    # args parse and data prepare
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
     _, model_type, share_type, ensemble_size, meta_class_size, _ = model_path.split('_')
@@ -77,6 +80,7 @@ if __name__ == '__main__':
     test_data = datasets.ImageFolder(root='{}/val'.format(data_path), transform=utils.test_transform)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8)
 
+    # model setup and meta id config
     features_extractor = Model(meta_class_size, ensemble_size, share_type, model_type)
     features_extractor.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     features_extractor = nn.DataParallel(features_extractor.to(gpu_ids[0]), device_ids=gpu_ids)
@@ -90,6 +94,7 @@ if __name__ == '__main__':
     results = {'train_loss': [], 'train_acc': [], 'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
     save_name_pre = '{}_{}_{}_{}'.format(model_type, share_type, ensemble_size, meta_class_size)
 
+    # training loop
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
         train_loss, train_acc = train(model, train_loader, optimizer, epoch)
