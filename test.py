@@ -11,7 +11,7 @@ from torchvision import datasets
 from tqdm import tqdm
 
 import utils
-from model import Net
+from model import Model
 
 warnings.filterwarnings("ignore")
 
@@ -59,22 +59,24 @@ def test(model, test_loader, epoch):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Test MoCo')
+    parser = argparse.ArgumentParser(description='Test Shadow Mode')
     parser.add_argument('--data_path', type=str, default='/home/data/imagenet/ILSVRC2012', help='Path to dataset')
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
     parser.add_argument('--model', type=str, default='epochs/features_extractor_resnet18_128_65536.pth',
                         help='Features extractor file')
+    parser.add_argument('--gpu_ids', default='0,1,2,3,4,5,6,7', type=str, help='selected gpu')
 
     args = parser.parse_args()
     data_path, batch_size, epochs, model_path = args.data_path, args.batch_size, args.epochs, args.model
     model_type, features_dim = model_path.split('_')[-3], int(model_path.split('_')[-2])
+    device_ids = [int(gpu) for gpu in args.gpu_ids.split(',')]
     train_data = datasets.CIFAR10(root='data', train=True, transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     test_data = datasets.CIFAR10(root='data', train=False, transform=utils.test_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-    features_extractor = Net(model_type, features_dim)
+    features_extractor = Model(model_type, features_dim)
     features_extractor.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     for param in features_extractor.parameters():
         param.requires_grad = False
