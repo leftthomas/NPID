@@ -5,6 +5,7 @@ import warnings
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
@@ -37,31 +38,39 @@ def train(model, train_loader, meta_ids, optimizer, epoch):
     return total_loss / n_data, total_acc / n_data * 100
 
 
-def test(model, test_loader, meta_ids, epoch):
+def test(model, train_loader, test_loader, meta_ids, epoch):
     model.eval()
     total_loss, total_top1, total_top5, n_data, memory_bank = 0.0, 0.0, 0.0, 0, []
-    train_bar = tqdm(train_loader, desc='Feature extracting')
-    test_bar = tqdm(test_loader)
+    train_bar, test_bar = tqdm(train_loader, desc='Feature extracting'), tqdm(test_loader)
     with torch.no_grad():
         for data, target in train_bar:
-            memory_bank.append(model(data.to('cuda')))
-        memory_bank = torch.cat(memory_bank).t().contiguous()
-        memory_bank_labels = torch.tensor(train_loader.dataset.targets).to('cuda')
+            memory_bank.append(F.normalize(model(data.to(gpu_ids[0])), dim=-1))
+        memory_bank = torch.cat(memory_bank)
+        memory_bank_labels = torch.tensor(train_loader.dataset.targets).to(gpu_ids[0])
         for data, target in test_bar:
-            y = model(data.to('cuda'))
+            output = model(data.to(gpu_ids[0]))
+            y = F.normalize(output, dim=-1)
+            labels = meta_ids[target].to(gpu_ids[0])
+            loss = cross_entropy_loss(output.permute(0, 2, 1).contiguous(), labels)
+
             n_data += len(data)
-            sim_index = torch.mm(y, memory_bank).argsort(dim=-1, descending=True)[:, :min(memory_bank.size(-1), 200)]
+            total_loss += loss.item() * len(data)
+            sim_matrix = torch.mean(torch.matmul(y[:, None, :, None, :], memory_bank[None, :, :, :, None])
+                                    .squeeze(dim=-1).squeeze(dim=-1), dim=-1)
+            sim_index = sim_matrix.argsort(dim=-1, descending=True)[:, :min(sim_matrix.size(-1), 200)]
             sim_labels = torch.index_select(memory_bank_labels, dim=-1, index=sim_index.reshape(-1)).view(len(data), -1)
+
             pred_labels = []
             for sim_label in sim_labels:
                 pred_labels.append(torch.histc(sim_label.float(), bins=len(train_loader.dataset.classes)))
             pred_labels = torch.stack(pred_labels).argsort(dim=-1, descending=True)
             total_top1 += torch.sum(
-                (pred_labels[:, :1] == target.to('cuda').unsqueeze(dim=-1)).any(dim=-1).float()).cpu().item()
+                (pred_labels[:, :1] == target.to(gpu_ids[0]).unsqueeze(dim=-1)).any(dim=-1).float()).item()
             total_top5 += torch.sum(
-                (pred_labels[:, :5] == target.to('cuda').unsqueeze(dim=-1)).any(dim=-1).float()).cpu().item()
-            test_bar.set_description('Test Epoch: [{}/{}] Acc@1:{:.2f}% Acc@5:{:.2f}%'
-                                     .format(epoch, epochs, total_top1 / n_data * 100, total_top5 / n_data * 100))
+                (pred_labels[:, :5] == target.to(gpu_ids[0]).unsqueeze(dim=-1)).any(dim=-1).float()).item()
+            test_bar.set_description('Test Epoch: [{}/{}] Loss: {:.4f} Acc@1:{:.2f}% Acc@5:{:.2f}%'
+                                     .format(epoch, epochs, total_loss / n_data, total_top1 / n_data * 100,
+                                             total_top5 / n_data * 100))
 
     return total_loss / n_data, total_top1 / n_data * 100, total_top5 / n_data * 100
 
@@ -87,6 +96,8 @@ if __name__ == '__main__':
     gpu_ids, load_ids = [int(gpu) for gpu in args.gpu_ids.split(',')], args.load_ids
     train_data = datasets.ImageFolder(root='{}/train'.format(data_path), transform=utils.train_transform)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8)
+    train_test_data = datasets.ImageFolder(root='{}/train'.format(data_path), transform=utils.test_transform)
+    train_test_loader = DataLoader(train_test_data, batch_size=batch_size, shuffle=False, num_workers=8)
     test_data = datasets.ImageFolder(root='{}/val'.format(data_path), transform=utils.test_transform)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8)
 
@@ -115,7 +126,7 @@ if __name__ == '__main__':
         train_loss, train_acc = train(model, train_loader, meta_ids, optimizer, epoch)
         results['train_loss'].append(train_loss)
         results['train_acc'].append(train_acc)
-        test_loss, test_acc_1, test_acc_5 = test(model, test_loader, meta_ids, epoch)
+        test_loss, test_acc_1, test_acc_5 = test(model, train_loader, test_loader, meta_ids, epoch)
         results['test_loss'].append(test_loss)
         results['test_acc_1'].append(test_acc_1)
         results['test_acc_5'].append(test_acc_5)
