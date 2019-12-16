@@ -18,6 +18,7 @@ from model import Model
 warnings.filterwarnings("ignore")
 
 
+# train for one epoch, use meta class to train
 def train(model, train_loader, meta_ids, optimizer, epoch):
     model.train()
     total_loss, total_acc, n_data, train_bar = 0.0, 0.0, 0, tqdm(train_loader)
@@ -38,6 +39,7 @@ def train(model, train_loader, meta_ids, optimizer, epoch):
     return total_loss / n_data, total_acc / n_data * 100
 
 
+# test for on epoch, use knn (k=200) to find the most similar images' class to assign test image
 def test(model, train_loader, test_loader, meta_ids, epoch):
     model.eval()
     total_loss, total_top1, total_top5, n_data, memory_bank = 0.0, 0.0, 0.0, 0, []
