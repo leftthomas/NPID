@@ -4,6 +4,7 @@ import warnings
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -21,7 +22,7 @@ def train(model, train_loader, optimizer, epoch):
     total_loss, total_true, n_data, train_bar = 0.0, 0.0, 0, tqdm(train_loader)
     for data, target in train_bar:
         data, target = data.to(gpu_ids[0]), target.to(gpu_ids[0])
-        features = features_extractor(data).view(len(data), -1)
+        features = F.normalize(features_extractor(data), dim=-1).view(len(data), -1)
         optimizer.zero_grad()
         output = model(features)
         loss = cross_entropy_loss(output, target)
@@ -44,7 +45,7 @@ def test(model, test_loader, epoch):
     with torch.no_grad():
         for data, target in test_bar:
             data, target = data.to(gpu_ids[0]), target.to(gpu_ids[0])
-            features = features_extractor(data).view(len(data), -1)
+            features = F.normalize(features_extractor(data), dim=-1).view(len(data), -1)
             output = model(features)
             loss = cross_entropy_loss(output, target)
 
