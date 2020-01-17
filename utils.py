@@ -1,60 +1,35 @@
-import math
-import random
-from itertools import product
-
+import torchvision.datasets as datasets
+from PIL import Image
 from torchvision import transforms
 
+
+class CIFAR10Instance(datasets.CIFAR10):
+    """CIFAR10Instance Dataset.
+    """
+
+    def __getitem__(self, index):
+        img, target = self.data[index], self.targets[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target, index
+
+
 train_transform = transforms.Compose([
-    transforms.RandomResizedCrop(224, scale=(0.8, 1.2), ratio=(0.8, 1.2)),
-    transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.2)], p=0.8),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomGrayscale(p=0.25),
+    transforms.RandomResizedCrop(32, scale=(0.2, 1.0)),
+    transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.4)], p=0.8),
+    transforms.RandomGrayscale(p=0.2),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
 
 test_transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-
-
-# random assign meta class for all classes
-def assign_meta_id(meta_class_size, num_class, ensemble_size):
-    assert math.pow(meta_class_size, ensemble_size) >= num_class, 'make sure meta_class_size^ensemble_size >= num_class'
-    assert meta_class_size <= num_class, 'make sure meta_class_size <= num_class'
-
-    multiple = num_class // meta_class_size
-    remain = num_class % meta_class_size
-    if remain != 0:
-        multiple += 1
-
-    max_try, i, assign_flag = 10, 0, False
-    while i < max_try:
-        idxes = []
-        for _ in range(ensemble_size):
-            idx_all = []
-            for _ in range(multiple):
-                idx_base = [j for j in range(meta_class_size)]
-                random.shuffle(idx_base)
-                idx_all += idx_base
-
-            idx_all = idx_all[:num_class]
-            random.shuffle(idx_all)
-            idxes.append(idx_all)
-        check_list = list(zip(*idxes))
-        i += 1
-        if len(check_list) != len(set(check_list)):
-            print('try to random assign labels again ({}/{})'.format(i, max_try))
-            assign_flag = False
-        else:
-            assign_flag = True
-            break
-
-    if not assign_flag:
-        remained = set(check_list)
-        idx_all = set(product(range(meta_class_size), repeat=ensemble_size))
-        added = set(random.sample(idx_all - remained, num_class - len(remained)))
-        idxes = list(zip(*(added | remained)))
-
-    return list(zip(*idxes))
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
