@@ -22,7 +22,6 @@ optional arguments:
 --k                           Top k most similar images used to predict the label [default value is 200]
 --batch_size                  Number of images in each mini-batch [default value is 128]
 --epochs                      Number of sweeps over the dataset to train [default value is 200]
---gpu_ids                     Selected gpu [default value is '0,1,2,3,4,5,6,7']
 ```
 
 ## Results

@@ -4,7 +4,6 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torch import nn
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -19,7 +18,7 @@ def train(net, data_loader, train_optimizer):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
     for data, target, pos_index in train_bar:
-        data = data.to(gpu_ids[0])
+        data = data.to('cuda')
         train_optimizer.zero_grad()
         features = net(data)
 
@@ -68,7 +67,7 @@ def test(net, memory_data_loader, test_data_loader):
     with torch.no_grad():
         # generate feature bank
         for data, target, _ in tqdm(memory_data_loader, desc='Feature extracting'):
-            feature_bank.append(net(data.to(gpu_ids[0])))
+            feature_bank.append(net(data.to('cuda')))
         # [D, N]
         feature_bank = torch.cat(feature_bank).t().contiguous()
         # [N]
@@ -76,7 +75,7 @@ def test(net, memory_data_loader, test_data_loader):
         # loop test data to predict the label by weighted knn search
         test_bar = tqdm(test_data_loader)
         for data, target, _ in test_bar:
-            data, target = data.to(gpu_ids[0]), target.to(gpu_ids[0])
+            data, target = data.to('cuda'), target.to('cuda')
             output = net(data)
 
             total_num += data.size(0)
@@ -113,12 +112,11 @@ if __name__ == '__main__':
     parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
     parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=200, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--gpu_ids', default='0,1,2,3,4,5,6,7', type=str, help='Selected gpu ids to use')
 
     # args parse
     args = parser.parse_args()
     feature_dim, m, temperature, momentum = args.feature_dim, args.m, args.temperature, args.momentum
-    k, batch_size, epochs, gpu_ids = args.k, args.batch_size, args.epochs, [int(gpu) for gpu in args.gpu_ids.split(',')]
+    k, batch_size, epochs = args.k, args.batch_size, args.epochs
 
     # data prepare
     train_data = utils.CIFAR10Instance(root='data', train=True, transform=utils.train_transform, download=True)
@@ -129,7 +127,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8)
 
     # model setup and optimizer config
-    model = nn.DataParallel(Model(feature_dim).to(gpu_ids[0]), device_ids=gpu_ids)
+    model = Model(feature_dim).to('cuda')
     optimizer = optim.SGD(model.parameters(), lr=0.03, momentum=0.9, weight_decay=5e-4)
     print("# trainable model parameters:", sum(param.numel() if param.requires_grad else 0
                                                for param in model.parameters()))
@@ -155,4 +153,4 @@ if __name__ == '__main__':
         lr_scheduler.step(epoch)
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
-            torch.save(model.module.state_dict(), 'epochs/{}_model.pth'.format(feature_dim))
+            torch.save(model.state_dict(), 'epochs/{}_model.pth'.format(feature_dim))
