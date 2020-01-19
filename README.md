@@ -5,7 +5,7 @@ A PyTorch implementation of NPID based on the paper [Unsupervised Feature Learni
 - [Anaconda](https://www.anaconda.com/download/)
 - [PyTorch](https://pytorch.org)
 ```
-conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
+conda install pytorch=1.3.1 torchvision cudatoolkit=10.0 -c pytorch
 ```
 
 ## Dataset
@@ -50,9 +50,9 @@ optional arguments:
 			<td align="center">0.1</td>
 			<td align="center">0.5</td>
 			<td align="center">200</td>
-			<td align="center">42.71</td>
-			<td align="center">68.69</td>
-			<td align="center"><a href="https://pan.baidu.com/s/1jP7zWezVPBZWx_9LjJCgWg">model</a>&nbsp;|&nbsp;xxi8</td>
+			<td align="center">80.64</td>
+			<td align="center">98.56</td>
+			<td align="center"><a href="https://pan.baidu.com/s/1akdeCaWiKQ03MeTD_MeapA">model</a>&nbsp;|&nbsp;v7qm</td>
 		</tr>
 	</tbody>
 </table>
