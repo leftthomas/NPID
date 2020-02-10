@@ -1,5 +1,5 @@
 # NPID
-A PyTorch implementation of NPID based on the paper [Unsupervised Feature Learning via Non-Parametric Instance Discrimination](https://arxiv.org/abs/1805.01978).
+A PyTorch implementation of NPID based on CVPR2018 paper [Unsupervised Feature Learning via Non-Parametric Instance Discrimination](https://arxiv.org/abs/1805.01978).
 
 ## Requirements
 - [Anaconda](https://www.anaconda.com/download/)
